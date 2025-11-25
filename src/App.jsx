@@ -85,6 +85,25 @@ export default function App(){
     'Management Viewer': { edit:false, qc:false, purchase:false, produce:false }
   }
 
+  // derive which top-level views should be visible for the current role
+  function visibleViewsForRole(r){
+    const p = perms[r] || {}
+    const views = ['Dashboard']
+    if(p.edit) views.push('Vendors','Suppliers','Materials')
+    if(p.produce) views.push('Production')
+    if(p.qc) views.push('QC')
+    if(p.purchase) views.push('Purchase')
+    // Reports should be visible to everyone who can view the app
+    views.push('Reports')
+    return views
+  }
+
+  useEffect(()=>{
+    // if current view is not allowed for the role, reset to Dashboard
+    const allowed = visibleViewsForRole(role)
+    if(!allowed.includes(view)) setView('Dashboard')
+  }, [role])
+
   // QC workflows
   function createGRN(materialCode, qty){
     setMaterials(ms => ms.map(m => m.code === materialCode ? {...m, qcPending: (m.qcPending||0) + qty} : m))
@@ -212,7 +231,7 @@ export default function App(){
 
           <div style={{display:'flex',gap:12,alignItems:'center',marginTop:12}}>
             <nav>
-              {['Dashboard','Vendors','Suppliers','Materials','Production','QC','Purchase','Reports'].map(v => (
+              {visibleViewsForRole(role).map(v => (
                 <button key={v} className="tab" onClick={()=>setView(v)} style={{fontWeight:view===v?700:400}}>{v}</button>
               ))}
             </nav>
