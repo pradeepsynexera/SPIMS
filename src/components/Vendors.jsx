@@ -30,7 +30,7 @@ export default function Vendors({vendors, setVendors, canEdit, notify}){
             <div key={v.id} className="card" style={{padding:10}}>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 <div style={{fontWeight:700}}>{v.name}</div>
-                <div className="muted">({v.id})</div>
+                <div className="muted">{v.id} - {v.name}</div>
                 <div className="right"><span className="badge">Class {v.classification || '-'}</span></div>
               </div>
               <div className="muted small" style={{marginTop:8}}>{v.contact}</div>

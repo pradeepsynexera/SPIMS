@@ -21,7 +21,18 @@ export default function App(){
   const [vendors, setVendors] = useState(()=>load('spims_vendors', sampleVendors))
   const [suppliers, setSuppliers] = useState(()=>load('spims_suppliers', sampleSuppliers))
   const [materials, setMaterials] = useState(()=>load('spims_materials', sampleMaterials))
-  const [boms, setBoms] = useState(()=>load('spims_boms', sampleBOMs))
+  const [boms, setBoms] = useState(()=>{
+    const raw = load('spims_boms', sampleBOMs)
+    const normalized = {}
+    Object.entries(raw || {}).forEach(([k,v]) => {
+      if(Array.isArray(v)){
+        normalized[k] = { rows: v.map(r=> ({ material: r.material, qty: r.qty, wastage: r.wastage||0 })), name: '', mould: '', piecesPerBox: 0, piecesPerPolybag: 0 }
+      } else {
+        normalized[k] = v
+      }
+    })
+    return normalized
+  })
   const [productionLog, setProductionLog] = useState(()=>load('spims_prodlog', []))
   const [plannedProductions, setPlannedProductions] = useState(()=>load('spims_plans', []))
   const [role, setRole] = useState('Admin')

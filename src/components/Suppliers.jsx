@@ -29,7 +29,7 @@ export default function Suppliers({suppliers, setSuppliers, canEdit}){
             <div key={s.id} className="card" style={{padding:10}}>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 <div style={{fontWeight:700}}>{s.name}</div>
-                <div className="muted">({s.id})</div>
+                <div className="muted">{s.id} - {s.name}</div>
                 <div className="right"><span className="badge">{s.location}</span></div>
               </div>
               <div className="muted small" style={{marginTop:8}}>{s.contact}</div>
