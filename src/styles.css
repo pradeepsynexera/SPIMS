@@ -64,6 +64,10 @@ pre{background:#fbfdff;padding:10px;border-radius:6px;border:1px solid #eef2ff}
 .sidebar.collapsed{width:56px;padding:6px}
 .sidebar.collapsed .tab span.label{display:none}
 .sidebar-toggle{background:transparent;border:0;cursor:pointer;padding:6px;border-radius:6px;position:absolute;right:8px;top:8px;z-index:10002}
+.sidebar-toggle{background:#fff;border:1px solid #eef2f7;cursor:pointer;padding:6px;border-radius:6px;position:absolute;top:8px;z-index:10002;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+/* place the toggle slightly outside the sidebar to avoid overlapping labels */
+.sidebar-toggle{right:-18px}
+.sidebar-toggle svg{display:block}
 
 /* hide sidebar internal user block when collapsed to avoid layout distortion */
 .sidebar.collapsed .sidebar-user{display:none}

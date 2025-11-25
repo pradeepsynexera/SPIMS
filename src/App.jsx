@@ -311,21 +311,40 @@ export default function App(){
               <div className="menu-header">
                 <div className="menu-title">Menu</div>
                 <div className="flex-spacer" />
-                <button className="sidebar-toggle" onClick={()=>{ setSidebarCollapsed(s=>{ const ns = !s; try{ localStorage.setItem('spims_sidebar_collapsed', JSON.stringify(ns)) }catch(e){}; return ns }) }} title="Toggle sidebar">{sidebarCollapsed ? '➡' : '⬅'}</button>
+                <button className="sidebar-toggle" onClick={()=>{ setSidebarCollapsed(s=>{ const ns = !s; try{ localStorage.setItem('spims_sidebar_collapsed', JSON.stringify(ns)) }catch(e){}; return ns }) }} title="Toggle sidebar" aria-expanded={!sidebarCollapsed} aria-label="Toggle sidebar">
+                  {/* hamburger icon (three lines) */}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="3" y="6" width="18" height="2" rx="1" fill="#0369A1"/><rect x="3" y="11" width="18" height="2" rx="1" fill="#0369A1"/><rect x="3" y="16" width="18" height="2" rx="1" fill="#0369A1"/></svg>
+                </button>
               </div>
               <div className="menu-list">
                 {visibleViewsForRole(role).map(v => (
                   <button key={v} className={`tab ${view===v ? 'active' : ''}`} onClick={()=>{ setView(v); setSidebarMobileOpen(false) }} aria-current={view===v? 'page' : undefined}>
                     <span className="nav-icon" aria-hidden="true">{
                       ({
-                        Dashboard: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zM13 21h8V11h-8v10zm0-18v6h8V3h-8z" fill="#0369A1"/></svg>),
-                        Vendors: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7h18v2H3V7zm0 6h12v2H3v-2zM3 3h18v2H3V3z" fill="#0369A1"/></svg>),
-                        Suppliers: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7v6c0 5 5 9 10 9s10-4 10-9V7L12 2z" fill="#0369A1"/></svg>),
-                        Materials: (<svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5" fill="#0369A1"/></svg>),
-                        Production: (<svg width="16" height="16" viewBox="0 0 24 24"><path d="M4 22h16v-2H4v2zm0-4h16V8H4v10zM6 10h12v6H6v-6z" fill="#0369A1"/></svg>),
-                        QC: (<svg width="16" height="16" viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" fill="#0369A1"/></svg>),
-                        Purchase: (<svg width="16" height="16" viewBox="0 0 24 24"><path d="M3 3h18v2H3V3zm2 6h14v10H5V9z" fill="#0369A1"/></svg>),
-                        Reports: (<svg width="16" height="16" viewBox="0 0 24 24"><path d="M3 13h2v6H3v-6zm4-4h2v10H7V9zm4-6h2v16h-2V3z" fill="#0369A1"/></svg>)
+                        Dashboard: (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="8" height="8" rx="1" fill="#0369A1"/><rect x="13" y="3" width="8" height="4" rx="1" fill="#0369A1"/><rect x="13" y="9" width="8" height="12" rx="1" fill="#0369A1"/></svg>
+                        ),
+                        Vendors: (
+                          <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="#0369A1"/></svg>
+                        ),
+                        Suppliers: (
+                          <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 7h18v2H3zM3 11h12v2H3zM3 3h18v2H3z" fill="#0369A1"/></svg>
+                        ),
+                        Materials: (
+                          <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l9 4.5v9L12 22 3 15.5v-9L12 2z" fill="#0369A1"/></svg>
+                        ),
+                        Production: (
+                          <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 13h8v8H3zM13 3h8v18h-8z" fill="#0369A1"/></svg>
+                        ),
+                        QC: (
+                          <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7v6c0 5 5 9 10 9s10-4 10-9V7l-10-5zm-1 14l-4-4 1.4-1.4L11 13.2l5.6-5.6L18 9l-7 7z" fill="#0369A1"/></svg>
+                        ),
+                        Purchase: (
+                          <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zm0-2h10V6H7v10zM17 4H7V2h10v2z" fill="#0369A1"/></svg>
+                        ),
+                        Reports: (
+                          <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 13h2v6H3zM7 9h2v10H7zM11 5h2v14h-2z" fill="#0369A1"/></svg>
+                        )
                       })[v]}
                     </span>
                     <span className="label">{v}</span>
