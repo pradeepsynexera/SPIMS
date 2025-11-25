@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 
-export default function Production({boms, materials, calcRequirements, autoGeneratePR, runProduction, setBoms, canProduce, productionLog, plannedProductions, addPlannedProduction, startPlannedProduction, updatePlannedProduction, completePlannedProduction, notify, confirm}){
+export default function Production({boms, materials, calcRequirements, autoGeneratePR, runProduction, setBoms, canProduce, productionLog, plannedProductions, addPlannedProduction, startPlannedProduction, updatePlannedProduction, completePlannedProduction, notify, confirm, schedulePlanWithOptions}){
+  // schedulePlanWithOptions is expected as a prop from App
   // Simple inline typeahead for materials (shows code - name and returns code)
   function TypeaheadMaterial({value, onChange}){
     const [query, setQuery] = React.useState('')
@@ -30,6 +31,7 @@ export default function Production({boms, materials, calcRequirements, autoGener
   const [editingBOM, setEditingBOM] = useState(null)
   const [planForm, setPlanForm] = useState({item: Object.keys(boms)[0]||'', date: new Date().toISOString().slice(0,10), qty:10})
   const [detailModal, setDetailModal] = useState({open:false, planId:null})
+  const [scheduleModal, setScheduleModal] = useState({open:false, planId:null, minPerDay:100, fixedDays:null, skipWeekends:false, startDate:'', preview:[]})
 
   // compute whether there are shortages
   const shortagesExist = useMemo(()=> Object.values(req).some(r => r.shortage > 0), [req])
@@ -89,6 +91,52 @@ export default function Production({boms, materials, calcRequirements, autoGener
 
   function openDetail(planId){ setDetailModal({open:true, planId}) }
   function closeDetail(){ setDetailModal({open:false, planId:null}) }
+
+  function computeSplit(total, minPer, startDate, skipWeekends=false, fixedDays=null){
+    let days = 1
+    if(fixedDays && Number(fixedDays)>0) days = Number(fixedDays)
+    else days = Math.max(1, Math.ceil(total / (Number(minPer) || 1)))
+    const base = Math.floor(total / days)
+    const remainder = total - base * days
+    const result = []
+    const start = startDate ? new Date(startDate) : new Date()
+    let d = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+    let idx = 0
+    while(result.length < days){
+      const dow = d.getDay()
+      if(skipWeekends && (dow===0 || dow===6)){ d.setDate(d.getDate()+1); continue }
+      const q = base + (idx < remainder ? 1 : 0)
+      result.push({date: new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString().slice(0,10), qty: q})
+      idx++; d.setDate(d.getDate()+1)
+    }
+    return result
+  }
+
+  function openScheduleModal(planId){
+    const plan = plannedProductions.find(p=>p.id===planId)
+    if(!plan){ notify && notify('Plan not found','warn'); return }
+    const start = plan.date || new Date().toISOString().slice(0,10)
+    const preview = computeSplit(Number(plan.plannedQty)||0, 100, start, false, null)
+    setScheduleModal({open:true, planId, minPerDay:100, fixedDays:null, skipWeekends:false, startDate: start, preview})
+  }
+
+  function updateSchedulePreview(minPer, startDate, planId, skipWeekends, fixedDays){
+    const plan = plannedProductions.find(p=>p.id===planId)
+    if(!plan) return
+    const total = Number(plan.plannedQty)||0
+    const preview = computeSplit(total, Number(minPer)||1, startDate, !!skipWeekends, fixedDays)
+    setScheduleModal(s => ({...s, minPerDay: Number(minPer)||1, startDate, preview, skipWeekends: !!skipWeekends, fixedDays: fixedDays ? Number(fixedDays) : null}))
+  }
+
+  function confirmSchedule(){
+    const m = scheduleModal
+    if(!m.planId){ notify && notify('No plan selected','warn'); return }
+    if(!schedulePlanWithOptions || typeof schedulePlanWithOptions !== 'function'){ notify && notify('Scheduling not available','warn'); setScheduleModal({open:false, planId:null}); return }
+    const opts = { minPerDay: m.minPerDay, fixedDays: m.fixedDays, skipWeekends: m.skipWeekends, startDate: m.startDate, preview: m.preview }
+    const res = schedulePlanWithOptions(m.planId, opts)
+    if(res && res.error) notify && notify(res.error,'danger'); else notify && notify(`Scheduled into ${res.created} day(s)`,'success')
+    setScheduleModal({open:false, planId:null, minPerDay:100, startDate:'', preview:[], skipWeekends:false, fixedDays:null})
+  }
 
   function createPR(){
     if(prLines.length===0){ notify && notify('No PR lines to create','warn'); return }
@@ -199,8 +247,9 @@ export default function Production({boms, materials, calcRequirements, autoGener
                       <td>{p.status}</td>
                       <td>
                         <button className="btn" onClick={()=>openDetail(p.id)}>Details</button>
-                        {p.status==='Planned' && <button className="btn" onClick={()=>startPlan(p.id)} style={{marginLeft:8}}>Start</button>}
-                        {p.status!=='Completed' && <button className="btn primary" style={{marginLeft:8}} onClick={()=>completePlan(p.id)}>Complete</button>}
+                                {p.status==='Planned' && <button className="btn" onClick={()=>startPlan(p.id)} style={{marginLeft:8}}>Start</button>}
+                                {p.status==='Planned' && <button className="btn" onClick={()=>openScheduleModal(p.id)} style={{marginLeft:8}}>Schedule</button>}
+                                {p.status!=='Completed' && <button className="btn primary" style={{marginLeft:8}} onClick={()=>completePlan(p.id)}>Complete</button>}
                       </td>
                     </tr>
                   </React.Fragment>
@@ -245,8 +294,54 @@ export default function Production({boms, materials, calcRequirements, autoGener
             </div>
           )}
 
+          {scheduleModal.open && (
+            <div style={{position:'fixed', left:0, top:0, right:0, bottom:0, background:'rgba(0,0,0,0.35)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:10001}}>
+              <div style={{background:'#fff', padding:18, borderRadius:8, width:'min(700px,96%)', maxHeight:'80vh', overflowY:'auto'}}>
+                <div style={{display:'flex', alignItems:'center'}}>
+                  <h4 style={{margin:0}}>Schedule Plan</h4>
+                  <div className="right"><button className="btn ghost" onClick={()=>setScheduleModal({open:false, planId:null, minPerDay:100, startDate:'', preview:[]})}>Close</button></div>
+                </div>
+                <div style={{marginTop:12}}>
+                  {(() => {
+                    const plan = plannedProductions.find(x=>x.id===scheduleModal.planId)
+                    if(!plan) return <div className="muted">Plan not found.</div>
+                    return (
+                      <div>
+                        <div style={{marginBottom:8}}>Plan: <strong>{bomLabel(plan.item)}</strong> • Total: <strong>{plan.plannedQty}</strong></div>
+                        <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                          <div>
+                            <label className="muted small">Min per day</label>
+                            <input type="number" min={1} value={scheduleModal.minPerDay} onChange={e=> updateSchedulePreview(e.target.value, scheduleModal.startDate, scheduleModal.planId)} style={{width:120, marginLeft:8}} />
+                          </div>
+                          <div>
+                            <label className="muted small">Start date</label>
+                            <input type="date" value={scheduleModal.startDate} onChange={e=> updateSchedulePreview(scheduleModal.minPerDay, e.target.value, scheduleModal.planId)} style={{marginLeft:8}} />
+                          </div>
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <h5>Preview</h5>
+                          <div className="schedule-preview">
+                            {scheduleModal.preview.map((r,i)=> <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'6px 4px',borderBottom:'1px solid #f3f6f8'}}><div>{r.date}</div><div><strong>{r.qty}</strong></div></div>)}
+                          </div>
+                        </div>
+                        <div style={{display:'flex', justifyContent:'flex-end', gap:8, marginTop:12}}>
+                          <button className="btn ghost" onClick={()=>setScheduleModal({open:false, planId:null, minPerDay:100, startDate:'', preview:[]})}>Cancel</button>
+                          <button className="btn primary" onClick={confirmSchedule}>Confirm Schedule</button>
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
+
       <div className="card">
-        <h4>Manage BOMs</h4>
+        <div style={{display:'flex', alignItems:'center', gap:12}}>
+          <h4 style={{margin:0}}>Manage BOMs</h4>
+          <div style={{flex:1}} />
+          <button className="btn primary" onClick={()=> setEditingBOM({ id:'', isNew:true, rows: [{material:'', qty:0, wastage:0}], mould:'', piecesPerBox:0, piecesPerPolybag:0 })}>Create BOM</button>
+        </div>
         <div className="muted small" style={{marginBottom:8}}>Edit existing BOMs inline. Save to update BOM definitions used in planning.</div>
         {Object.keys(boms).length===0 && <div className="muted">No BOMs defined.</div>}
         <div className="grid">
@@ -275,16 +370,6 @@ export default function Production({boms, materials, calcRequirements, autoGener
             </div>
             )
           })}
-          {/* new BOM card */}
-          <div className="card" style={{padding:10}}>
-            <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <div style={{fontWeight:700}}>+ New BOM</div>
-              <div className="muted small" style={{marginLeft:8}}>Create a new BOM</div>
-            </div>
-            <div style={{marginTop:8}}>
-              <button className="btn primary" onClick={()=> setEditingBOM({ id:'', isNew:true, rows: [{material:'', qty:0, wastage:0}], mould:'', piecesPerBox:0, piecesPerPolybag:0 })}>Create BOM</button>
-            </div>
-          </div>
         </div>
 
         {editingBOM && (

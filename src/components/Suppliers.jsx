@@ -12,7 +12,7 @@ export default function Suppliers({suppliers, setSuppliers, canEdit}){
           <input placeholder="Name" value={f.name} onChange={e=>setF({...f,name:e.target.value})} />
           <input placeholder="Contact" value={f.contact} onChange={e=>setF({...f,contact:e.target.value})} />
         </div>
-        <div className="row" style={{marginTop:8}}>
+        <div className="row mt-8">
           <input placeholder="Location" value={f.location} onChange={e=>setF({...f,location:e.target.value})} />
           <input placeholder="Products (comma)" value={f.products} onChange={e=>setF({...f,products:e.target.value})} />
           <div className="form-actions">
@@ -26,14 +26,14 @@ export default function Suppliers({suppliers, setSuppliers, canEdit}){
         <h4>Suppliers</h4>
         <div className="grid">
           {suppliers.map(s=> (
-            <div key={s.id} className="card" style={{padding:10}}>
-              <div style={{display:'flex',alignItems:'center',gap:8}}>
-                <div style={{fontWeight:700}}>{s.name}</div>
+            <div key={s.id} className="card p-10">
+              <div className="flex-row">
+                <div className="fw-700">{s.name}</div>
                 <div className="muted">{s.id} - {s.name}</div>
                 <div className="right"><span className="badge">{s.location}</span></div>
               </div>
-              <div className="muted small" style={{marginTop:8}}>{s.contact}</div>
-              <div style={{marginTop:8}}>
+              <div className="muted small mt-8">{s.contact}</div>
+              <div className="mt-8">
                 <strong>Products:</strong> {(s.products||[]).join(', ')}
               </div>
             </div>

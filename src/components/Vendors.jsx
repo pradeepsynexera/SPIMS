@@ -12,7 +12,7 @@ export default function Vendors({vendors, setVendors, canEdit, notify}){
           <input placeholder="Name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} />
           <input placeholder="Contact" value={form.contact} onChange={e=>setForm({...form,contact:e.target.value})} />
         </div>
-        <div className="row" style={{marginTop:8}}>
+  <div className="row mt-8">
           <input placeholder="GST" value={form.gst} onChange={e=>setForm({...form,gst:e.target.value})} />
           <input placeholder="Payment terms" value={form.payment} onChange={e=>setForm({...form,payment:e.target.value})} />
           <input placeholder="Classification" value={form.classification} onChange={e=>setForm({...form,classification:e.target.value})} />
@@ -27,14 +27,14 @@ export default function Vendors({vendors, setVendors, canEdit, notify}){
         <h4>Vendors</h4>
         <div className="grid">
           {vendors.map(v=> (
-            <div key={v.id} className="card" style={{padding:10}}>
-              <div style={{display:'flex',alignItems:'center',gap:8}}>
-                <div style={{fontWeight:700}}>{v.name}</div>
+            <div key={v.id} className="card p-10">
+              <div className="flex-row">
+                <div className="fw-700">{v.name}</div>
                 <div className="muted">{v.id} - {v.name}</div>
                 <div className="right"><span className="badge">Class {v.classification || '-'}</span></div>
               </div>
-              <div className="muted small" style={{marginTop:8}}>{v.contact}</div>
-              <div style={{display:'flex',gap:8,marginTop:10,alignItems:'center'}}>
+              <div className="muted small mt-8">{v.contact}</div>
+              <div className="flex-row-gap mt-10">
                 <div className="muted small">GST: {v.gst}</div>
                 <div className="muted small">Payment: {v.payment}</div>
               </div>

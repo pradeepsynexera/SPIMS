@@ -38,6 +38,10 @@ export default function App(){
   const [role, setRole] = useState('Admin')
   const [view, setView] = useState('Dashboard')
   const [user, setUser] = useState(null)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(()=> {
+    try{ return JSON.parse(localStorage.getItem('spims_sidebar_collapsed')||'false') }catch(e){ return false }
+  })
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false)
 
   useEffect(()=> save('spims_vendors', vendors), [vendors])
   useEffect(()=> save('spims_suppliers', suppliers), [suppliers])
@@ -196,6 +200,77 @@ export default function App(){
     setPlannedProductions(pl=> [entry, ...pl])
     return entry
   }
+  // Distribute a plan into daily plans using a minimum per-day target.
+  // Example: plan for 1000 with minPerDay=100 -> days = ceil(1000/100)=10 -> create 10 daily plans with quantities close to even split.
+  function schedulePlanDaily(planId, minPerDay){
+    const plan = plannedProductions.find(p=>p.id===planId)
+    if(!plan) return {error:'Plan not found'}
+    const total = Number(plan.plannedQty) || 0
+    const minPer = Number(minPerDay) || 0
+    if(minPer <= 0) return {error:'minPerDay must be > 0'}
+    const days = Math.max(1, Math.ceil(total / minPer))
+    const base = Math.floor(total / days)
+    const remainder = total - base * days
+    const dayQuantities = Array.from({length: days}, (_,i) => base + (i < remainder ? 1 : 0))
+    // starting from plan.date (ISO YYYY-MM-DD) or today if invalid
+    const start = plan.date ? new Date(plan.date) : new Date()
+    const created = new Date().toISOString()
+    const newEntries = dayQuantities.map((q, idx) => ({ id: Date.now() + idx + Math.floor(Math.random()*1000), item: plan.item, plannedQty: q, producedQty: 0, date: new Date(start.getFullYear(), start.getMonth(), start.getDate() + idx).toISOString().slice(0,10), status: 'Planned', createdAt: created, parentPlanId: plan.id }))
+    // mark original plan as Distributed and keep for audit
+    setPlannedProductions(pl => {
+      const others = pl.filter(p=>p.id !== planId)
+      return [...newEntries, ...others.map(p=> p.id===planId ? {...p, status:'Distributed', distributedTo: newEntries.map(e=>e.id)} : p)]
+    })
+    return {success:true, created: newEntries.length}
+  }
+  // More flexible scheduler: supports fixedDays, skipWeekends, startDate, or explicit preview array
+  function schedulePlanWithOptions(planId, opts){
+    const plan = plannedProductions.find(p=>p.id===planId)
+    if(!plan) return {error:'Plan not found'}
+    const total = Number(plan.plannedQty) || 0
+    const minPer = Number(opts && opts.minPerDay) || 0
+    const fixedDays = opts && Number(opts.fixedDays) > 0 ? Number(opts.fixedDays) : null
+    const skipWeekends = !!(opts && opts.skipWeekends)
+    const start = opts && opts.startDate ? new Date(opts.startDate) : new Date(plan.date || Date.now())
+    const preview = opts && Array.isArray(opts.preview) && opts.preview.length>0 ? opts.preview : null
+
+    // If preview provided, use preview quantities with computed dates (respecting skipWeekends)
+    let dayEntries = []
+    if(preview){
+      // use preview dates/qty directly
+      dayEntries = preview.map((r, idx) => ({date: r.date, qty: Number(r.qty)||0}))
+    } else {
+      let days = 1
+      if(fixedDays) days = fixedDays
+      else if(minPer>0) days = Math.max(1, Math.ceil(total / minPer))
+      else days = 1
+      // distribute total into 'days' parts
+      const base = Math.floor(total / days)
+      const remainder = total - base * days
+      const parts = Array.from({length: days}, (_,i) => base + (i < remainder ? 1 : 0))
+      // generate dates sequence respecting skipWeekends
+      const seq = []
+      let d = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+      for(let i=0; seq.length<parts.length;){
+        // if skipWeekends and day is saturday(6) or sunday(0), advance
+        const dow = d.getDay()
+        if(skipWeekends && (dow===0 || dow===6)){
+          d.setDate(d.getDate()+1); continue
+        }
+        seq.push(new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString().slice(0,10))
+        d.setDate(d.getDate()+1)
+      }
+      dayEntries = parts.map((q,idx)=> ({date: seq[idx], qty: q}))
+    }
+
+    const created = new Date().toISOString()
+    const newEntries = dayEntries.map((e, idx) => ({ id: Date.now() + idx + Math.floor(Math.random()*1000), item: plan.item, plannedQty: Number(e.qty)||0, producedQty: 0, date: e.date, status: 'Planned', createdAt: created, parentPlanId: plan.id }))
+    setPlannedProductions(pl => {
+      const others = pl.filter(p=>p.id !== planId)
+      return [...newEntries, ...others.map(p=> p.id===planId ? {...p, status:'Distributed', distributedTo: newEntries.map(e=>e.id)} : p)]
+    })
+    return {success:true, created: newEntries.length}
+  }
   function startPlannedProduction(planId){
     setPlannedProductions(pl=> pl.map(p => p.id===planId ? {...p, status:'In Progress', startedAt: new Date().toISOString()} : p))
   }
@@ -219,46 +294,77 @@ export default function App(){
         <Login onLogin={(u)=>{ setUser(u); setRole(u.role) }} users={sampleUsers} />
       ) : (
         <>
-          <header style={{background:'#0b5', padding:12, color:'#003'}}>
-            <div style={{display:'flex', alignItems:'center'}}>
-              <h2 style={{margin:0}}>SPIMS</h2>
-              <div className="right" style={{display:'flex',alignItems:'center',gap:8}}>
-                <div className="muted small">Signed in as <strong>{user.name}</strong> (<em>{role}</em>)</div>
-                <button className="btn ghost" onClick={()=>{ setUser(null); setRole('Management Viewer'); setView('Dashboard') }}>Logout</button>
-              </div>
+          <header className="app-header">
+            <div className="header-left">
+              <button className="sidebar-toggle-mobile" onClick={()=> setSidebarMobileOpen(s=>!s)} aria-label="Toggle menu" aria-expanded={sidebarMobileOpen}>☰</button>
+              <h2 className="brand">SPIMS</h2>
+            </div>
+            <div className="flex-spacer" />
+            <div className="header-right">
+              <div className="muted small">Signed in as <strong>{user.name}</strong> (<em>{role}</em>)</div>
+              <button className="btn ghost" onClick={()=>{ setUser(null); setRole('Management Viewer'); setView('Dashboard') }}>Logout</button>
             </div>
           </header>
 
-          <div style={{display:'flex',gap:12,alignItems:'center',marginTop:12}}>
-            <nav>
-              {visibleViewsForRole(role).map(v => (
-                <button key={v} className="tab" onClick={()=>setView(v)} style={{fontWeight:view===v?700:400}}>{v}</button>
-              ))}
-            </nav>
+          <div className="main-layout">
+            <aside className={"sidebar" + (sidebarCollapsed ? ' collapsed' : '') + (sidebarMobileOpen ? ' mobile-visible' : '')}>
+              <div className="menu-header">
+                <div className="menu-title">Menu</div>
+                <div className="flex-spacer" />
+                <button className="sidebar-toggle" onClick={()=>{ setSidebarCollapsed(s=>{ const ns = !s; try{ localStorage.setItem('spims_sidebar_collapsed', JSON.stringify(ns)) }catch(e){}; return ns }) }} title="Toggle sidebar">{sidebarCollapsed ? '➡' : '⬅'}</button>
+              </div>
+              <div className="menu-list">
+                {visibleViewsForRole(role).map(v => (
+                  <button key={v} className={`tab ${view===v ? 'active' : ''}`} onClick={()=>{ setView(v); setSidebarMobileOpen(false) }} aria-current={view===v? 'page' : undefined}>
+                    <span className="nav-icon" aria-hidden="true">{
+                      ({
+                        Dashboard: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zM13 21h8V11h-8v10zm0-18v6h8V3h-8z" fill="#0369A1"/></svg>),
+                        Vendors: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7h18v2H3V7zm0 6h12v2H3v-2zM3 3h18v2H3V3z" fill="#0369A1"/></svg>),
+                        Suppliers: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7v6c0 5 5 9 10 9s10-4 10-9V7L12 2z" fill="#0369A1"/></svg>),
+                        Materials: (<svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5" fill="#0369A1"/></svg>),
+                        Production: (<svg width="16" height="16" viewBox="0 0 24 24"><path d="M4 22h16v-2H4v2zm0-4h16V8H4v10zM6 10h12v6H6v-6z" fill="#0369A1"/></svg>),
+                        QC: (<svg width="16" height="16" viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" fill="#0369A1"/></svg>),
+                        Purchase: (<svg width="16" height="16" viewBox="0 0 24 24"><path d="M3 3h18v2H3V3zm2 6h14v10H5V9z" fill="#0369A1"/></svg>),
+                        Reports: (<svg width="16" height="16" viewBox="0 0 24 24"><path d="M3 13h2v6H3v-6zm4-4h2v10H7V9zm4-6h2v16h-2V3z" fill="#0369A1"/></svg>)
+                      })[v]}
+                    </span>
+                    <span className="label">{v}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="sidebar-user">
+                <div className="muted small">Signed in as <strong>{user.name}</strong> (<em>{role}</em>)</div>
+                <div className="user-actions">
+                  <button className="btn ghost" onClick={()=>{ setUser(null); setRole('Management Viewer'); setView('Dashboard') }}>Logout</button>
+                </div>
+              </div>
+            </aside>
+
+            <main className="main-content">
+              {view==='Dashboard' && <Dashboard materials={materials} productionLog={productionLog} vendors={vendors} notify={notify} confirm={showConfirm} />}
+              {view==='Vendors' && <Vendors vendors={vendors} setVendors={setVendors} canEdit={perms[role].edit} notify={notify} confirm={showConfirm} />}
+              {view==='Suppliers' && <Suppliers suppliers={suppliers} setSuppliers={setSuppliers} canEdit={perms[role].edit} notify={notify} confirm={showConfirm} />}
+              {view==='Materials' && <Materials materials={materials} setMaterials={setMaterials} createGRN={createGRN} inspectMaterial={inspectMaterialWithUser} canQC={perms[role].qc} notify={notify} confirm={showConfirm} user={user} />}
+              {view==='Production' && <Production boms={boms} materials={materials} calcRequirements={calcRequirements} autoGeneratePR={autoGeneratePR} runProduction={runProduction} setBoms={setBoms} canProduce={perms[role].produce} productionLog={productionLog} plannedProductions={plannedProductions} addPlannedProduction={addPlannedProduction} startPlannedProduction={startPlannedProduction} updatePlannedProduction={updatePlannedProduction} completePlannedProduction={completePlannedProduction} notify={notify} confirm={showConfirm} schedulePlanWithOptions={schedulePlanWithOptions} />}
+              {view==='QC' && <QC materials={materials} inspectMaterial={inspectMaterialWithUser} productionLog={productionLog} inspectFinishedGood={inspectFinishedGoodWithUser} canQC={perms[role].qc} notify={notify} confirm={showConfirm} user={user} />}
+              {view==='Purchase' && <Purchase materials={materials} autoGeneratePR={autoGeneratePR} calcRequirements={calcRequirements} notify={notify} confirm={showConfirm} />}
+              {view==='Reports' && <Reports materials={materials} productionLog={productionLog} vendors={vendors} notify={notify} confirm={showConfirm} />}
+            </main>
           </div>
 
-          {view==='Dashboard' && <Dashboard materials={materials} productionLog={productionLog} vendors={vendors} notify={notify} confirm={showConfirm} />}
-          {view==='Vendors' && <Vendors vendors={vendors} setVendors={setVendors} canEdit={perms[role].edit} notify={notify} confirm={showConfirm} />}
-          {view==='Suppliers' && <Suppliers suppliers={suppliers} setSuppliers={setSuppliers} canEdit={perms[role].edit} notify={notify} confirm={showConfirm} />}
-          {view==='Materials' && <Materials materials={materials} setMaterials={setMaterials} createGRN={createGRN} inspectMaterial={inspectMaterialWithUser} canQC={perms[role].qc} notify={notify} confirm={showConfirm} user={user} />}
-          {view==='Production' && <Production boms={boms} materials={materials} calcRequirements={calcRequirements} autoGeneratePR={autoGeneratePR} runProduction={runProduction} setBoms={setBoms} canProduce={perms[role].produce} productionLog={productionLog} plannedProductions={plannedProductions} addPlannedProduction={addPlannedProduction} startPlannedProduction={startPlannedProduction} updatePlannedProduction={updatePlannedProduction} completePlannedProduction={completePlannedProduction} notify={notify} confirm={showConfirm} />}
-          {view==='QC' && <QC materials={materials} inspectMaterial={inspectMaterialWithUser} productionLog={productionLog} inspectFinishedGood={inspectFinishedGoodWithUser} canQC={perms[role].qc} notify={notify} confirm={showConfirm} user={user} />}
-          {view==='Purchase' && <Purchase materials={materials} autoGeneratePR={autoGeneratePR} calcRequirements={calcRequirements} notify={notify} confirm={showConfirm} />}
-          {view==='Reports' && <Reports materials={materials} productionLog={productionLog} vendors={vendors} notify={notify} confirm={showConfirm} />}
-
-          <div style={{marginTop:18}} className="muted small">Tip: data is stored in browser localStorage. To reset clear site data.</div>
+          <div className="tip muted small">Tip: data is stored in browser localStorage. To reset clear site data.</div>
           {/* Toasts */}
-          <div style={{position:'fixed', right:18, top:18, zIndex:9999, display:'flex', flexDirection:'column', alignItems:'flex-end'}}>
+          <div className="toasts-container">
             {toasts.map(t=> (
-              <div key={t.id} style={{background:'#fff', padding:10, borderRadius:8, boxShadow:'0 6px 18px rgba(0,0,0,0.12)', marginTop:8, minWidth:200, borderLeft: `4px solid ${t.type==='warn'?'#f59e0b': t.type==='danger'?'#ef4444':'#06a'}`}}>{t.message}</div>
+              <div key={t.id} className={`toast ${t.type==='warn'?'warn': t.type==='danger'?'danger':''}`}>{t.message}</div>
             ))}
           </div>
           {/* Confirm modal */}
           {confirmState.open && (
-            <div style={{position:'fixed', left:0, top:0, right:0, bottom:0, background:'rgba(0,0,0,0.35)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:10000}}>
-              <div style={{background:'#fff', padding:18, borderRadius:8, width:420}}>
+            <div className="modal-backdrop">
+              <div className="modal-box">
                 <div style={{marginBottom:12}}>{confirmState.message}</div>
-                <div style={{display:'flex', justifyContent:'flex-end', gap:8}}>
+                <div className="modal-actions">
                   <button className="btn ghost" onClick={()=>handleConfirmResponse(false)}>No</button>
                   <button className="btn primary" onClick={()=>handleConfirmResponse(true)}>Yes</button>
                 </div>
