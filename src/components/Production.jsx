@@ -1,6 +1,28 @@
 import React, { useState, useMemo } from 'react'
 
 export default function Production({boms, materials, calcRequirements, autoGeneratePR, runProduction, setBoms, canProduce, productionLog, plannedProductions, addPlannedProduction, startPlannedProduction, updatePlannedProduction, completePlannedProduction, notify, confirm}){
+  // Simple inline typeahead for materials (shows code - name and returns code)
+  function TypeaheadMaterial({value, onChange}){
+    const [query, setQuery] = React.useState('')
+    const [open, setOpen] = React.useState(false)
+    React.useEffect(()=>{
+      const m = materials.find(x=>x.code===value)
+      setQuery(m ? `${m.code} - ${m.name}` : (value||''))
+    }, [value])
+    const matches = (query?materials.filter(m => (`${m.code} - ${m.name}`).toLowerCase().includes(query.toLowerCase())) : materials).slice(0,20)
+    return (
+      <div style={{position:'relative'}}>
+        <input value={query} onChange={e=>{ setQuery(e.target.value); setOpen(true) }} onFocus={()=>setOpen(true)} onBlur={()=>setTimeout(()=>setOpen(false), 150)} placeholder="Type to search RM" style={{width:'100%'}} />
+        {open && matches.length>0 && (
+          <div style={{position:'absolute', left:0, right:0, background:'#fff', border:'1px solid #eee', maxHeight:160, overflowY:'auto', zIndex:2000}}>
+            {matches.map(m=> (
+              <div key={m.code} onMouseDown={(ev)=>{ ev.preventDefault(); onChange(m.code); setQuery(`${m.code} - ${m.name}`); setOpen(false) }} style={{padding:8, cursor:'pointer', borderBottom:'1px solid #fafafa'}}>{m.code} - {m.name}</div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
   const [item, setItem] = useState(Object.keys(boms)[0]||'')
   const [qty, setQty] = useState(10)
   const [req, setReq] = useState({})
@@ -308,12 +330,7 @@ export default function Production({boms, materials, calcRequirements, autoGener
                     {editingBOM.rows.map((r, idx)=> (
                       <tr key={idx}>
                         <td>
-                          <select value={r.material} onChange={e=>{
-                            const rows = editingBOM.rows.slice(); rows[idx].material = e.target.value; setEditingBOM({...editingBOM, rows})
-                          }}>
-                            <option value="">Select material</option>
-                            {materials.map(mm => <option key={mm.code} value={mm.code}>{mm.code} - {mm.name}</option>)}
-                          </select>
+                          <TypeaheadMaterial value={r.material} onChange={(code)=>{ const rows = editingBOM.rows.slice(); rows[idx].material = code; setEditingBOM({...editingBOM, rows}) }} />
                         </td>
                         <td><input type="number" min="0" step="0.01" value={r.qty} onChange={e=>{ const rows = editingBOM.rows.slice(); rows[idx].qty = Number(e.target.value); setEditingBOM({...editingBOM, rows}) }} /></td>
                         <td><input type="number" min="0" step="0.1" value={r.wastage} onChange={e=>{ const rows = editingBOM.rows.slice(); rows[idx].wastage = Number(e.target.value); setEditingBOM({...editingBOM, rows}) }} /></td>

@@ -59,6 +59,15 @@ export default function App(){
     setToasts(t => [...t, {id, message, type}])
     setTimeout(()=> setToasts(t => t.filter(x=>x.id !== id)), 3500)
   }
+
+  // On mount, detect and report BOM migration (if any legacy array-form BOMs were found and normalized)
+  useEffect(()=>{
+    const raw = load('spims_boms', sampleBOMs)
+    const legacyCount = Object.values(raw||{}).filter(v=> Array.isArray(v)).length
+    if(legacyCount>0){
+      notify && notify(`Migrated ${legacyCount} BOM(s) to the new format on app load.`, 'info')
+    }
+  }, [])
   function showConfirm(message){
     return new Promise(res => setConfirmState({open:true, message, resolve: res}))
   }
