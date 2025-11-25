@@ -166,15 +166,16 @@ export default function Materials({materials, setMaterials, createGRN, inspectMa
                     const ok = confirm ? await confirm('A material with this RM ID already exists. Overwrite?') : window.confirm('A material with this RM ID already exists. Overwrite?')
                     if(!ok) return
                   }
-                  // build material object
-                  const mat = { code: editingMaterial.id, name: editingMaterial.name, category: editingMaterial.category, uom: editingMaterial.uom || 'pcs', reorder: Number(editingMaterial.reorder)||0, stock: Number(editingMaterial.stock)||0, qcPending: Number(editingMaterial.qcPending)||0, rejected: Number(editingMaterial.rejected)||0 }
-                  // save: remove old if renaming
+                  // save: preserve existing qcHistory when updating/renaming
                   setMaterials(prev => {
+                    const existingCode = editingMaterial.originalId || editingMaterial.id
+                    const existing = prev.find(m => m.code === existingCode)
+                    const mat = { code: editingMaterial.id, name: editingMaterial.name, category: editingMaterial.category, uom: editingMaterial.uom || 'pcs', reorder: Number(editingMaterial.reorder)||0, stock: Number(editingMaterial.stock)||0, qcPending: Number(editingMaterial.qcPending)||0, rejected: Number(editingMaterial.rejected)||0, qcHistory: (existing && existing.qcHistory) ? existing.qcHistory.slice() : [] }
                     let others = prev.filter(m => m.code !== (editingMaterial.originalId || '') && m.code !== editingMaterial.id)
                     // if not renaming and original exists, preserve others but replace
                     if(editingMaterial.originalId && editingMaterial.originalId === editingMaterial.id){
                       notify && notify('Material updated','success')
-                      return prev.map(m => m.code === editingMaterial.id ? mat : m)
+                      return prev.map(m => m.code === editingMaterial.id ? {...m, ...mat} : m)
                     }
                     // insert new at front
                     notify && notify('Material saved','success')
